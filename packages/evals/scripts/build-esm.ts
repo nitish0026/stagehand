@@ -16,7 +16,10 @@ const evalsRoot = path.join(repoRoot, "packages", "evals");
 const evalsDist = path.join(evalsRoot, "dist", "esm");
 
 const run = (args: string[]) => {
-  const result = spawnSync("pnpm", args, { stdio: "inherit", cwd: repoRoot });
+  const cmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  console.log("running:", cmd, args.join(" "), "cwd=", repoRoot);
+  const result = spawnSync(cmd, args, { stdio: "inherit", cwd: repoRoot, shell: true });
+  console.log("-> spawn result", { status: result.status, error: result.error });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }

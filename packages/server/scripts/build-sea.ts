@@ -65,9 +65,17 @@ const binaryName =
   `stagehand-server-${targetPlatform}-${targetArch}${targetPlatform === "win32" ? ".exe" : ""}`;
 
 const run = (cmd: string, args: string[], opts: { cwd?: string } = {}) => {
-  const result = spawnSync(cmd, args, { stdio: "inherit", ...opts });
+  // On Windows we need to invoke pnpm via pnpm.cmd and run under a shell so the
+  // .cmd file will execute properly.  Also log for debugging if something fails.
+  const isPNPM = cmd === "pnpm";
+  const actualCmd = isPNPM && process.platform === "win32" ? "pnpm.cmd" : cmd;
+  const result = spawnSync(actualCmd, args, {
+    stdio: "inherit",
+    shell: isPNPM && process.platform === "win32",
+    ...opts,
+  });
   if (result.status !== 0) {
-    throw new Error(`Command failed: ${cmd} ${args.join(" ")}`);
+    throw new Error(`Command failed: ${actualCmd} ${args.join(" ")}`);
   }
 };
 
@@ -238,7 +246,8 @@ const buildEsmBundle = () => {
     "--sourcemap=inline",
     "--sources-content",
     `--source-root=${repoDir}`,
-    '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
+    // quote the value to prevent the shell from splitting on spaces
+    '--banner:js="import { createRequire as __createRequire } from \"node:module\"; const require = __createRequire(import.meta.url);"',
     "--log-level=warning",
   ];
   run("pnpm", esbuildArgs, { cwd: repoDir });

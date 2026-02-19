@@ -1,0 +1,4 @@
+PATH: /healthz
+STATUS: 200
+
+{"status":"ok","timestamp":"2026-02-19T15:17:36.283Z"}

@@ -1,0 +1,4 @@
+PATH: /v1
+STATUS: 404
+
+{"message":"Route GET:/v1 not found","error":"Not Found","statusCode":404}

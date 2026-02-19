@@ -1,0 +1,4 @@
+PATH: /readyz
+STATUS: 200
+
+Ready

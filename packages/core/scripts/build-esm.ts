@@ -12,9 +12,13 @@ import { spawnSync } from "node:child_process";
 import { findRepoRoot } from "./test-utils.js";
 
 const repoRoot = findRepoRoot(process.cwd());
+console.log("repoRoot=", repoRoot);
 
 const run = (args: string[]) => {
-  const result = spawnSync("pnpm", args, { stdio: "inherit", cwd: repoRoot });
+  const cmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  console.log("running:", cmd, args.join(" "), "cwd=", repoRoot);
+  const result = spawnSync(cmd, args, { stdio: "inherit", cwd: repoRoot, shell: true });
+  console.log("-> spawn result", { status: result.status, error: result.error });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
@@ -27,11 +31,29 @@ fs.rmSync(coreDist, { recursive: true, force: true });
 // Core ESM emit includes generated lib/version.ts from gen-version (run in core build).
 run(["exec", "tsc", "-p", "packages/core/tsconfig.json"]);
 // Tests run via node/playwright need JS test files; esbuild emits ESM test JS into dist/esm.
+// On Windows the shell doesn't expand globs, so expand them manually and pass explicit paths.
+import glob from "glob";
+const testFiles = [
+  ...glob.sync("packages/core/tests/**/*.ts", {
+    cwd: repoRoot,
+    absolute: true,
+    nodir: true,
+  }),
+  ...glob.sync("packages/core/lib/v3/tests/**/*.ts", {
+    cwd: repoRoot,
+    absolute: true,
+    nodir: true,
+  }),
+];
+if (testFiles.length === 0) {
+  console.warn("warning: no test files found for esbuild");
+} else {
+  console.log(`esbuild will process ${testFiles.length} test files`);
+}
 run([
   "exec",
   "esbuild",
-  "packages/core/tests/**/*.ts",
-  "packages/core/lib/v3/tests/**/*.ts",
+  ...testFiles,
   "--outdir=packages/core/dist/esm",
   "--outbase=packages/core",
   "--format=esm",
