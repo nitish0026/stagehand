@@ -36,27 +36,20 @@ export async function createStreamingResponse<TV3>({
 }: StreamingResponseOptions<TV3>) {
   const shouldStreamResponse = shouldRespondWithSSE(request);
   const modelApiKey = getModelApiKey(request);
+  // Debug: log whether a per-request model API key was provided (redacted)
+  try {
+    // eslint-disable-next-line no-console
+    console.log(
+      `createStreamingResponse: modelApiKey=${modelApiKey ? 'REDACTED' : 'MISSING'}`,
+    );
+  } catch (_err) {
+    // ignore logging failures
+  }
 
   const sessionStore = getSessionStore();
   const sessionConfig = await sessionStore.getSessionConfig(sessionId);
-  const browserType = sessionConfig.browserType ?? "local";
+  // On-premises: all sessions are local
 
-  let browserbaseApiKey = sessionConfig.browserbaseApiKey;
-  let browserbaseProjectId = sessionConfig.browserbaseProjectId;
-
-  if (browserType === "browserbase") {
-    browserbaseApiKey =
-      browserbaseApiKey ?? getOptionalHeader(request, "x-bb-api-key");
-    browserbaseProjectId =
-      browserbaseProjectId ?? getOptionalHeader(request, "x-bb-project-id");
-
-    if (!browserbaseApiKey || !browserbaseProjectId) {
-      return reply.status(StatusCodes.BAD_REQUEST).send({
-        error:
-          "Browserbase API key and project ID are required for browserbase sessions",
-      });
-    }
-  }
 
   // Parse data using V3 schema
   let parsedData: TV3;

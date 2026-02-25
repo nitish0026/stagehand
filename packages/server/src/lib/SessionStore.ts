@@ -50,6 +50,9 @@ export interface CreateSessionParams {
 
   /** WebSocket URL for connecting to the browser (returned to client) */
   connectUrl?: string;
+  
+  /** Model API key (captured from initial request header) for use in this session */
+  modelApiKey?: string;
 
   // Cloud-specific metadata fields
   /** Act timeout in milliseconds */

@@ -1,8 +1,6 @@
 import type { RouteHandler, RouteOptions } from "fastify";
 import { StatusCodes } from "http-status-codes";
-import Browserbase from "@browserbasehq/sdk";
 import { Api } from "@browserbasehq/stagehand";
-import type { SessionRetrieveResponse } from "@browserbasehq/sdk/resources/sessions/sessions";
 import { type FastifyZodOpenApiSchema } from "fastify-zod-openapi";
 import { z } from "zod/v4";
 
@@ -100,97 +98,38 @@ const startRouteHandler: RouteHandler = withErrorHandling(
       }
     }
 
-    const browserType = browser?.type ?? "browserbase";
-
-    let bbApiKey: string | undefined;
-    let bbProjectId: string | undefined;
-    let browserbaseSessionId: string | undefined;
+    // On-premises deployment: enforce local browser type
+    // All sessions run locally; no cloud platform integration
+    const effectiveBrowserType = "local";
     let connectUrl: string | undefined;
 
-    if (browserType === "browserbase") {
-      bbApiKey = getOptionalHeader(request, "x-bb-api-key");
-      bbProjectId = getOptionalHeader(request, "x-bb-project-id");
-
-      if (!bbApiKey || !bbProjectId) {
-        return error(
-          reply,
-          "Missing required headers for browserbase sessions",
-        );
-      }
-
-      const bb = new Browserbase({ apiKey: bbApiKey });
-
-      if (browserbaseSessionID) {
-        const existing = await bb.sessions.retrieve(browserbaseSessionID);
-        browserbaseSessionId = existing?.id;
-        connectUrl = existing?.connectUrl;
-        if (!browserbaseSessionId) {
-          return error(reply, "Failed to retrieve browserbase session");
-        }
-        if (!connectUrl) {
-          return error(reply, "Browserbase session missing connectUrl");
-        }
-      } else {
-        const createPayload = {
-          projectId: browserbaseSessionCreateParams?.projectId ?? bbProjectId,
-          ...browserbaseSessionCreateParams,
-          browserSettings: {
-            ...(browserbaseSessionCreateParams?.browserSettings ?? {}),
-            viewport: browserbaseSessionCreateParams?.browserSettings
-              ?.viewport ?? {
-              width: 1288,
-              height: 711,
-            },
-          },
-          userMetadata: {
-            ...(browserbaseSessionCreateParams?.userMetadata ?? {}),
-            stagehand: "true",
-          },
-        } satisfies Browserbase.Sessions.SessionCreateParams;
-
-        const created = (await bb.sessions.create(
-          createPayload,
-        )) as SessionRetrieveResponse;
-
-        browserbaseSessionId = created?.id;
-        connectUrl = created?.connectUrl;
-        if (!browserbaseSessionId) {
-          return error(reply, "Failed to create browserbase session");
-        }
-        if (!connectUrl) {
-          return error(reply, "Browserbase session missing connectUrl");
-        }
-      }
-    }
-
     const sessionStore = getSessionStore();
+    const modelApiKey = getModelApiKey(request);
 
-    // For local browsers without a connectUrl, get it from browser.connectUrl
-    if (browserType === "local") {
+    // For local browsers, use cdpUrl if provided
+    if (effectiveBrowserType === "local") {
       connectUrl = browser?.cdpUrl;
     }
 
     const session = await sessionStore.startSession({
-      browserType,
+      browserType: effectiveBrowserType,
       connectUrl,
-      browserbaseSessionID:
-        browserType === "browserbase"
-          ? (browserbaseSessionId ?? browserbaseSessionID)
-          : undefined,
-      browserbaseApiKey: bbApiKey,
-      browserbaseProjectId: bbProjectId,
+      browserbaseSessionID: undefined,
+      browserbaseApiKey: undefined,
+      browserbaseProjectId: undefined,
       modelName,
       domSettleTimeoutMs,
       verbose,
       systemPrompt,
-      browserbaseSessionCreateParams,
+      browserbaseSessionCreateParams: undefined,
       selfHeal,
       waitForCaptchaSolves,
       clientLanguage,
       sdkVersion,
       experimental,
+      modelApiKey, // Store the API key from the request so it's available for the entire session
       localBrowserLaunchOptions:
-        browserType === "local" && (browser?.launchOptions || browser?.cdpUrl)
+        browser?.launchOptions || browser?.cdpUrl
           ? {
               cdpUrl: browser?.cdpUrl,
               ...(browser?.launchOptions ?? {}),
@@ -201,8 +140,7 @@ const startRouteHandler: RouteHandler = withErrorHandling(
     // For local browsers with launchOptions (no explicit cdpUrl), eagerly
     // initialize the browser so we can return the actual CDP URL
     let finalCdpUrl = connectUrl ?? session.cdpUrl ?? "";
-    if (browserType === "local" && browser?.launchOptions && !browser?.cdpUrl) {
-      const modelApiKey = getModelApiKey(request);
+    if (browser?.launchOptions && !browser?.cdpUrl) {
       try {
         const stagehand = await sessionStore.getOrCreateStagehand(
           session.sessionId,
@@ -214,7 +152,7 @@ const startRouteHandler: RouteHandler = withErrorHandling(
           {
             err,
             sessionId: session.sessionId,
-            browserType,
+            browserType: effectiveBrowserType,
             chromePathEnv: process.env.CHROME_PATH,
             launchOptions: {
               executablePath: browser.launchOptions.executablePath,

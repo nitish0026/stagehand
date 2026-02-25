@@ -6,7 +6,7 @@
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         modelName: 'gpt-4o',
-        browser: { type: 'local', cdpUrl: 'http://example.local:9222' }
+        browser: { type: 'local', cdpUrl: 'https://www.makemytrip.com/' }
       })
     });
     const txt = await res.text();

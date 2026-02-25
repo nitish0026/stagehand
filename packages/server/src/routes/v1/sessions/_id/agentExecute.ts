@@ -8,6 +8,25 @@ import { AppError, withErrorHandling } from "../../../../lib/errorHandler.js";
 import { createStreamingResponse } from "../../../../lib/stream.js";
 import { getSessionStore } from "../../../../lib/sessionStoreManager.js";
 
+/**
+ * Convert deprecated model names (e.g., "gpt-4o") to new format (e.g., "openai/gpt-4o")
+ * This is required because the new format creates AISdkClient which has getLanguageModel()
+ * The old format creates OpenAIClient which doesn't have this method, breaking agent execution
+ */
+function convertModelNameToNewFormat(modelName: string): string {
+  if (modelName.includes("/")) {
+    // Already in new format
+    return modelName;
+  }
+  // Infer provider from model name
+  if (modelName.includes("gpt") || modelName.includes("o1") || modelName.includes("o3")) {
+    return `openai/${modelName}`;
+  } else if (modelName.includes("claude")) {
+    return `anthropic/${modelName}`;
+  }
+  return modelName;
+}
+
 const agentExecuteRouteHandler: RouteHandlerMethod = withErrorHandling(
   async (request, reply) => {
     if (!(await authMiddleware(request))) {
@@ -53,11 +72,11 @@ const agentExecuteRouteHandler: RouteHandlerMethod = withErrorHandling(
           ...agentConfig,
           model:
             typeof agentConfig.model === "string"
-              ? { modelName: agentConfig.model }
+              ? convertModelNameToNewFormat(agentConfig.model)
               : agentConfig.model
                 ? {
                     ...agentConfig.model,
-                    modelName: agentConfig.model.modelName ?? "gpt-4o",
+                    modelName: convertModelNameToNewFormat(agentConfig.model.modelName ?? "gpt-4o"),
                   }
                 : undefined,
         };
